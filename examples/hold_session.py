@@ -1,6 +1,6 @@
 ###
 #
-# Lenovo Redfish examples - Get power state and hold session for the time specified
+# Lenovo Redfish examples - Hold session for the time specified
 #
 # Copyright Notice:
 #
@@ -27,7 +27,7 @@ import time
 import lenovo_utils as utils
 
 
-def get_power_state(ip, login_account, login_password, system_id, session_time):
+def hold_session(ip, login_account, login_password, session_time):
     """Get power state    
     :params ip: BMC IP address
     :type ip: string
@@ -35,9 +35,7 @@ def get_power_state(ip, login_account, login_password, system_id, session_time):
     :type login_account: string
     :params login_password: BMC user password
     :type login_password: string
-    :params system_id: ComputerSystem instance id(None: first instance, All: all instances)
-    :type system_id: None or string
-    :params session_time: the time during which session will be held, default is 60 seconds 
+    :params session_time: the time during which session will be held, default is 30 seconds 
     :type session_time: int
     :returns: returns power state when succeeded or error message when failed
     """
@@ -51,47 +49,28 @@ def get_power_state(ip, login_account, login_password, system_id, session_time):
         # Login into the server and create a session
         REDFISH_OBJ.login(auth="session")
     except:
-        result = {'ret': False, 'msg': "Please check the username, password, IP is correct"}
+        result = {'ret': False, 'msg': "Error_message: %s. Please check if username, password and IP are correct" % repr(e)}
         return result
     
-    # Wait seconds so that the session can be kept for testing GetSessions or ClearSessions
-    time.sleep(session_time)
-    
-    # GET the ComputerSystem resource
-    power_details = []
-    system = utils.get_system_url("/redfish/v1", system_id, REDFISH_OBJ)
-    if not system:
-        result = {'ret': False, 'msg': "This system id is not exist or system member is None"}
+    try:
+        sessionkey = REDFISH_OBJ.get_session_key()
+        sessionlocation = REDFISH_OBJ.get_session_location()
+        # Wait seconds so that the session can be kept for testing GetSessions or ClearSessions
+        time.sleep(session_time)
         REDFISH_OBJ.logout()
+        result = {'ret': True, 'msg': "Log out normally, hold %s seconds totally. sessionkey is %s, location is %s." % (session_time, sessionkey, sessionlocation)}
+    except Exception as e:
+        result = {'ret': True, 'msg': "Session has been deleted. Message: %s." % repr(e)}
+    finally:
         return result
-    for i in range(len(system)):
-        system_url = system[i]
-        response_system_url = REDFISH_OBJ.get(system_url, None)
-        if response_system_url.status == 200:
-            # Get the response
-            power_state = {}
-            # Get the PowerState property
-            PowerState = response_system_url.dict["PowerState"]
-            power_state["PowerState"] = PowerState
-            power_details.append(power_state)
-        else:
-            result = {'ret': False, 'msg': "response_system_url Error code %s" % response_system_url.status}
-            REDFISH_OBJ.logout()
-            return result
-
-    result['ret'] = True
-    result['entries'] = power_details
-    # Logout of the current session
-    REDFISH_OBJ.logout()
-    return result
 
 
 def add_helpmessage(parser):
-    parser.add_argument('--time', type=str, required=False, help='Input the time during which session will be held, default is 60 seconds')
+    parser.add_argument('--time', type=str, required=False, help='Input the time during which session will be held, default is 30 seconds')
 
 
 def add_parameter():
-    """Add set chassis indicator led parameter"""
+    """Add time parameter"""
     argget = utils.create_common_parameter_list()
     add_helpmessage(argget)
     args = argget.parse_args()
@@ -106,19 +85,15 @@ if __name__ == '__main__':
     ip = parameter_info['ip']
     login_account = parameter_info["user"]
     login_password = parameter_info["passwd"]
-    system_id = parameter_info['sysid']
     
     try:
         session_time = int(parameter_info['time'])
     except:
-        session_time = 60
+        session_time = 30
     
-    #print(parameter_info)
-    
-    # Get power state and check result
-    result = get_power_state(ip, login_account, login_password, system_id, session_time)
+    # hold session
+    result = hold_session(ip, login_account, login_password, session_time)
     if result['ret'] is True:
-        del result['ret']
-        sys.stdout.write(json.dumps(result['entries'], sort_keys=True, indent=2))
+        sys.stdout.write(result['msg'] + '\n')
     else:
-        sys.stderr.write(result['msg'])
+        sys.stderr.write(result['msg'] + '\n')

@@ -28,7 +28,7 @@ import lenovo_utils as utils
 
 
 def update_fw(ip, login_account, login_password, fixid, localpath, firmwarerole, fsprotocol, fsport, fsip, fsusername, fspassword, fsdir):
-    """Update firmware    
+    """Update firmware
     :params ip: BMC IP address
     :type ip: string
     :params login_account: BMC user name
@@ -54,10 +54,36 @@ def update_fw(ip, login_account, login_password, fixid, localpath, firmwarerole,
     result = {}
     download_flag = False
     xml_file = fixid + '.xml'
+    # Connect using the address, account name, and password
+    login_host = "https://" + ip
+    try:
+        # Create a REDFISH object
+        REDFISH_OBJ = redfish.redfish_client(base_url=login_host, username=login_account,
+                                             password=login_password, default_prefix='/redfish/v1')
+        #REDFISH_OBJ.login(auth="session")
+        REDFISH_OBJ.login(auth="basic")
+    except:
+        result = {'ret': False, 'msg': "Please check the username, password, IP is correct"}
+        return result
+
+    # Get ServiceRoot resource
+    response_base_url = REDFISH_OBJ.get('/redfish/v1', None)
+    # Get response_update_service_url
+    if response_base_url.status == 200:
+        update_service_url = response_base_url.dict['UpdateService']['@odata.id']
+    else:
+        error_message = utils.get_extended_error(response_base_url)
+        result = {'ret': False, 'msg': "Url '/redfish/v1' response Error code %s \nerror_message: %s" % (
+        response_base_url.status, error_message)}
+        return result
 
     # Check user specify parameter
-    if not localpath:
+    if not localpath and fsprotocol.upper() == "SFTP":
         download_flag = sftp_download_xmlfile(xml_file, fsip, fsport, fsusername, fspassword, fsdir)
+    elif fsprotocol.upper() == "HTTP":
+        Image_uri = fsprotocol.lower() + "://" + fsip + "/" + fsdir + '/' + fixid
+        result = amd_firmware_update(REDFISH_OBJ, update_service_url, Image_uri, firmwarerole)
+        return result
     else:
         # Parse the xml file if local path exits
         if not os.path.exists(localpath):
@@ -108,28 +134,7 @@ def update_fw(ip, login_account, login_password, fixid, localpath, firmwarerole,
             result = {'ret': False, 'msg': "Upload payload file failed, please try again."}
             return result
 
-    # Connect using the address, account name, and password
-    login_host = "https://" + ip
     try:
-        # Create a REDFISH object
-        REDFISH_OBJ = redfish.redfish_client(base_url=login_host, username=login_account,
-                                        password=login_password, default_prefix='/redfish/v1')
-        REDFISH_OBJ.login(auth="session")
-    except:
-        result = {'ret': False, 'msg': "Please check the username, password, IP is correct"}
-        return result
-
-    try:
-        # Get ServiceRoot resource
-        response_base_url = REDFISH_OBJ.get('/redfish/v1', None)
-        # Get response_update_service_url
-        if response_base_url.status == 200:
-            update_service_url = response_base_url.dict['UpdateService']['@odata.id']
-        else:
-            error_message = utils.get_extended_error(response_base_url)
-            result = {'ret': False, 'msg': "Url '/redfish/v1' response Error code %s \nerror_message: %s" % (response_base_url.status, error_message)}
-            return result
-
         response_update_service_url = REDFISH_OBJ.get(update_service_url, None)
         if response_update_service_url.status == 200:
             update_firmware_inventory_url = response_update_service_url.dict['Actions']['#UpdateService.SimpleUpdate']['target']
@@ -160,34 +165,21 @@ def update_fw(ip, login_account, login_password, fixid, localpath, firmwarerole,
 
             # Update firmware via redfish api
             response_firmware_inventory = REDFISH_OBJ.post(update_firmware_inventory_url, body=parameter)
-            if response_firmware_inventory.status == 202:
-                if firmwarerole == "Primary":
-                    firmware_type = category
-                else:
-                    firmware_type = category+"-"+firmwarerole
+            if response_firmware_inventory.status in [202, 204]:
                 task_uri = response_firmware_inventory.dict['@odata.id']
-                while True:
-                    task_detail_url = REDFISH_OBJ.get(task_uri, None)
-                    if task_detail_url.status == 200:
-                        task_state = task_detail_url.dict["TaskState"]
-                        print('\r{0}'.format(task_state), end='', flush=True)
-                        if task_state in ["Completed", "OK"]:
-                            print()
-                            result = {'ret': True, 'msg': "Update firmware(%s) [%s to %s]  successfully" % (
-                            firmware_type, current_version, update_version)}
-                            # Delete the task when the taskstate is completed
-                            REDFISH_OBJ.delete(task_uri, None)
-                            return result
-                        elif task_state == 'Exception':
-                            result = {'ret': False, 'msg': 'Taskstate exception'}
-                            break
-                        else:
-                            time.sleep(1)
-                            continue
+                result = task_monitor(REDFISH_OBJ, task_uri)
+                # Delete task
+                REDFISH_OBJ.delete(task_uri, None)
+                if result["ret"] is True:
+                    task_state = result["msg"]
+                    if task_state in ["Completed", "Done"]:
+                        result = {'ret': True, 'msg': "Update firmware successfully"}
+                        return result
                     else:
-                        error_message = utils.get_extended_error(task_detail_url)
-                        result = {'ret': False, 'msg': "Url '%s' response Error code %s \nerror_message: %s" % (
-                            task_uri, task_detail_url.status, error_message)}
+                        result = {'ret': False, 'msg': "Update firmware failed, task state is %s" % task_state}
+                        return result
+                else:
+                    return result
 
             else:
                 error_message = utils.get_extended_error(response_firmware_inventory)
@@ -201,6 +193,122 @@ def update_fw(ip, login_account, login_password, fixid, localpath, firmwarerole,
         # Logout of the current session
         REDFISH_OBJ.logout()
         return result
+
+
+def amd_firmware_update(REDFISH_OBJ, update_service_url, Image_uri, firmwarerole):
+    body = {}
+    response_update_service_url = REDFISH_OBJ.get(update_service_url, None)
+    if response_update_service_url.status == 200:
+        if "Oem" in response_update_service_url.dict['Actions']:
+            Oem_dict = response_update_service_url.dict['Actions']['Oem']
+            if "#UpdateService.HPMUpdate" in Oem_dict and firmwarerole.upper() == "BMC":
+                firmware_update_url = response_update_service_url.dict['Actions']['Oem']['#UpdateService.HPMUpdate']['target']
+            elif "#UpdateService.HPMUpdate" in Oem_dict and firmwarerole.upper() == "UEFI":
+                firmware_update_url = response_update_service_url.dict['Actions']['Oem']["#UpdateService.UEFIUpdate"]['target']
+            else:
+                firmware_update_url = ""
+        else:
+            firmware_update_url =response_update_service_url.dict['Actions']['#UpdateService.SimpleUpdate']['target']
+        body["ImageURI"] = Image_uri
+        body["TransferProtocol"] = fsprotocol.upper()
+        response = REDFISH_OBJ.post(firmware_update_url, body=body)
+        if response.status in [200, 202, 204]:
+            if firmwarerole.upper() == "BMC":
+                result = {'ret': True, 'msg': 'BMC refresh successful, wait five minutes for BMC to restart'}
+                return result
+            else:
+                task_uri = update_service_url
+                result = task_monitor(REDFISH_OBJ, task_uri)
+                # Delete task
+                REDFISH_OBJ.delete(task_uri, None)
+                if result["ret"] is True:
+                    task_state = result["msg"]
+                    if task_state in ["Completed", "Done"]:
+                        result = {'ret': True, 'msg': "Update firmware successfully"}
+                        return result
+                    else:
+                        result = {'ret': False, 'msg': "Update firmware failed, task state is %s" % task_state}
+                        return result
+                else:
+                    return result
+        else:
+            error_message = utils.get_extended_error(response)
+            result = {'ret': False, 'msg': "Url '%s' response Error code %s \nerror_message: %s" % (
+                firmware_update_url, response.status, error_message)}
+            return result
+    else:
+        error_message = utils.get_extended_error(update_service_url)
+        result = {'ret': False, 'msg': "Url '%s' response Error code %s \nerror_message: %s" % (
+            update_service_url, response_update_service_url.status, error_message)}
+        return result
+
+
+def flush():
+    list = ['|', '\\', '-', '/']
+    for i in list:
+        sys.stdout.write(' ' * 100 + '\r')
+        sys.stdout.flush()
+        sys.stdout.write(i + '\r')
+        sys.stdout.flush()
+        time.sleep(0.1)
+
+
+def task_monitor(REDFISH_OBJ, task_uri):
+    """Monitor task status"""
+    RUNNING_TASK_STATE = ["New", "Pending", "Service", "Starting", "Stopping", "Running", "Cancelling", "Verifying", "Flashing"]
+    END_TASK_STATE = ["Cancelled", "Completed", "Exception", "Killed", "Interrupted", "Suspended", "Done"]
+    current_state = ""
+
+    while True:
+        time.sleep(3)
+        response_task_uri = REDFISH_OBJ.get(task_uri, None)
+        if response_task_uri.status == 200:
+            if "TaskState" in response_task_uri.dict:
+                task_state = response_task_uri.dict["TaskState"]
+            elif "Oem" in response_task_uri.dict:
+                if "UpdateStatus" in response_task_uri.dict['Oem']:
+                    task_state = response_task_uri.dict["Oem"]["UpdateStatus"]
+                else:
+                    task_state = "Exception"
+            else:
+                task_state = "Exception"
+
+            if task_state in RUNNING_TASK_STATE:
+                if task_state != current_state:
+                    current_state = task_state
+                    print('Task state is %s, wait a minute' % current_state)
+                    continue
+                else:
+                    flush()
+            elif task_state.startswith("Flashing"):
+                sys.stdout.write(' ' * 100 + '\r')
+                sys.stdout.flush()
+                sys.stdout.write(task_state + '\r')
+                sys.stdout.flush()
+                continue
+            elif task_state.startswith("Downloading"):
+                sys.stdout.write(' ' * 100 + '\r')
+                sys.stdout.flush()
+                sys.stdout.write(task_state + '\r')
+                sys.stdout.flush()
+                continue
+            elif task_state.startswith("Update"):
+                sys.stdout.write(' ' * 100 + '\r')
+                sys.stdout.flush()
+                sys.stdout.write(task_state + '\r')
+                sys.stdout.flush()
+                continue
+            elif task_state in END_TASK_STATE:
+                print("End of the task")
+                result = {'ret':True, 'msg': task_state}
+                return result
+            else:
+                result = {"ret":False, "msg":"Task Not conforming to Schema Specification"}
+                return result
+        else:
+            message = utils.get_extended_error(response_task_uri)
+            result = {'ret': False, 'msg': "Url '%s' response Error code %s, \nError message :%s" % (task_uri, response_task_uri.status, message)}
+            return result
 
 
 def check_pre_req_info(REDFISH_OBJ, pre_req_info_dict, firmwareinventory_info_url):
@@ -317,7 +425,7 @@ def sftp_upload_payload(localpath, payload, fsport, fsip, fsusername, fspassword
                 upload_flag = True
             else:
                 sftp.put(fw_payload, fsdir + "/" + payload)
-                upload_flag = True 
+                upload_flag = True
         else:
             print("Uploading files may take several minutes.")
             sftp.put(fw_payload, fsdir + "/" + payload)
@@ -329,7 +437,7 @@ def sftp_upload_payload(localpath, payload, fsport, fsip, fsusername, fspassword
 
 
 def sftp_download_xmlfile(xml_file, fsip, fsport, fsusername, fspassword, fsdir):
-    """Down load the firmware xml file"""
+    """Download the firmware xml file"""
     # Connect file server using the fsip, fsusername, and fspassword
     download_flag = False
     try:
@@ -359,8 +467,8 @@ def add_parameter():
     argget = utils.create_common_parameter_list()
     argget.add_argument('--fixid', type=str,required=True, help='Specify the fixid of the firmware to be updated.')
     argget.add_argument('--localpath', type=str, help='Specify the absolute path of firmware locally.')
-    argget.add_argument('--firmwarerole', type=str, default='primary', help='Specify the firmware role, role primary backup only for BMC. Support:["Primary"，"Backup"]')
-    argget.add_argument('--fsprotocol', type=str, help='Specify the file server protocol.Support:["SFTP"]')
+    argget.add_argument('--firmwarerole', type=str, required=True, help='Specifies the type of firmware to refresh')
+    argget.add_argument('--fsprotocol', type=str, help='Specify the file server protocol, ThinkSystem support SFTP/FTP services, AMD servers only support HTTP services.')
     argget.add_argument('--fsport', type=int, default='22', help='Specify the file server port')
     argget.add_argument('--fsip', type=str, help='Specify the file server ip.')
     argget.add_argument('--fsusername', type=str, help='Specify the file server username.')

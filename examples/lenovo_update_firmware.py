@@ -60,8 +60,7 @@ def update_fw(ip, login_account, login_password, fixid, localpath, firmwarerole,
         # Create a REDFISH object
         REDFISH_OBJ = redfish.redfish_client(base_url=login_host, username=login_account,
                                              password=login_password, default_prefix='/redfish/v1')
-        #REDFISH_OBJ.login(auth="session")
-        REDFISH_OBJ.login(auth="basic")
+        REDFISH_OBJ.login(auth="session")
     except:
         result = {'ret': False, 'msg': "Please check the username, password, IP is correct"}
         return result
@@ -255,12 +254,11 @@ def flush():
 
 def task_monitor(REDFISH_OBJ, task_uri):
     """Monitor task status"""
-    RUNNING_TASK_STATE = ["New", "Pending", "Service", "Starting", "Stopping", "Running", "Cancelling", "Verifying", "Flashing"]
-    END_TASK_STATE = ["Cancelled", "Completed", "Exception", "Killed", "Interrupted", "Suspended", "Done"]
+    RUNNING_TASK_STATE = ["New", "Pending", "Service", "Starting", "Stopping", "Running", "Cancelling", "Verifying", "Flashing", "__NULL__", "Preparing"]
+    END_TASK_STATE = ["Cancelled", "Completed", "Exception", "Killed", "Interrupted", "Suspended", "Done", "Failed when Flashing Image."]
     current_state = ""
 
     while True:
-        time.sleep(3)
         response_task_uri = REDFISH_OBJ.get(task_uri, None)
         if response_task_uri.status == 200:
             if "TaskState" in response_task_uri.dict:
@@ -280,6 +278,12 @@ def task_monitor(REDFISH_OBJ, task_uri):
                     continue
                 else:
                     flush()
+            elif task_state.startswith("Preparing"):
+                sys.stdout.write(' ' * 100 + '\r')
+                sys.stdout.flush()
+                sys.stdout.write(task_state + '\r')
+                sys.stdout.flush()
+                continue
             elif task_state.startswith("Flashing"):
                 sys.stdout.write(' ' * 100 + '\r')
                 sys.stdout.flush()

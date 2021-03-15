@@ -2,17 +2,17 @@
 |--------------------|------------------------------------------|--------|--------|--------|---------|
 | Inventory          | get_bmc_inventory.py                     | Yes    | Yes    | Yes    | Yes     |
 |                    | get_cpu_inventory.py                     | Yes    | Yes    | Yes    | Yes     |
-|                    | get_fan_inventory.py                     | Yes    | Yes    | Yes    | Yes     |
+|                    | get_fan_inventory.py                     | Yes    | Yes    | Yes *3 | Yes *3  |
 |                    | get_memory_inventory.py                  | Yes    | Yes    | Yes    | Yes     |
 |                    | get_nic_inventory.py                     | Yes    | Yes    | Yes    | Yes     |
 |                    | get_pci_inventory.py                     | Yes    | Yes    | Yes    | Yes     |
-|                    | get_psu_inventory.py                     | Yes    | Yes    | Yes    | Yes     |
-|                    | get_power_redundancy.py                  | Yes    | Yes    | Yes    | Yes     |
+|                    | get_psu_inventory.py                     | Yes    | Yes    | Yes *3 | Yes *3  |
+|                    | get_power_redundancy.py                  | Yes    | Yes    | Yes *3 | Yes *3  |
 |                    | get_storage_inventory.py                 | Yes    | Yes    | Yes    | Yes     |
 |                    | get_system_inventory.py                  | Yes    | Yes    | Yes    | Yes     |
 |                    | get_temperatures_inventory.py            | Yes    | Yes    | Yes    | Yes     |
 |                    | lenovo_get_cpu_inventory.py              | Yes    | Yes    | Yes    | Yes     |
-|                    | get_volt_inventory.py                    | Yes    | Yes    | Yes    | Yes     |
+|                    | get_volt_inventory.py                    | Yes    | Yes    | Yes *3 | Yes *3  |
 |                    | manage_inventory.py                      | Yes    | Yes    | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
 | Power Control      | get_power_state.py                       | Yes    | Yes    | Yes    | Yes     |
@@ -47,28 +47,28 @@
 |                    | set_server_boot_once.py                  | Yes    | Yes    | Yes    | Yes     |
 |                    | get_secure_boot_status.py                | Yes    | Yes    | Yes    | Yes     |
 |                    | disable_secure_boot.py                   | Yes    | Yes    | Yes    | Yes     |
-|                    | enable_secure_boot.py                    | Yes    | Yes    | Yes    | Yes     |
+|                    | enable_secure_boot.py                    | Yes *1 | Yes    | Yes    | Yes     |
 |                    | reset_secure_boot.py                     | Yes    | Yes    | Yes    | Yes     |
 |                    | set_bios_password.py                     | Yes    | Yes    | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
 | User Management    | lenovo_get_bmc_user_accounts.py          | Yes    | Yes    | Yes    | Yes     |
-|                    | lenovo_create_bmc_user.py                | Yes    | Yes    | Yes    | Yes     |
+|                    | lenovo_create_bmc_user.py                | Yes    | Yes    | Yes *3 | Yes *3  |
 |                    | lenovo_delete_bmc_user.py                | Yes    | Yes    | Yes    | Yes     |
-|                    | update_bmc_user_password.py              | Yes    | Yes    | Yes    | Yes     |
+|                    | update_bmc_user_password.py              | Yes    | Yes    | Yes *3 | Yes *3  |
 |                    | lenovo_get_bmc_user_global.py            | NO     | Yes    | Yes    | Yes     |
 |                    | lenovo_set_bmc_user_global.py            | NO     | Yes    | Yes    | Yes     |
-|                    | disable_bmc_user.py                      | Yes    | Yes    | Yes    | Yes     |
-|                    | enable_bmc_user.py                       | Yes    | Yes    | Yes    | Yes     |
+|                    | disable_bmc_user.py                      | Yes    | Yes    | Yes *4 | Yes     |
+|                    | enable_bmc_user.py                       | Yes    | Yes *2 | Yes *4 | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
 | Light Path         | get_chassis_indicator_led.py             | Yes    | Yes    | Yes    | Yes     |
 |                    | set_chassis_indicator_led.py             | Yes    | Yes    | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
-| Power Management   | get_power_limit.py                       | Yes    | Yes    | Yes    | Yes     |
-|                    | set_power_limit.py                       | NO     | NO     | Yes    | Yes     |
+| Power Management   | get_power_limit.py                       | Yes    | Yes    | Yes *3 | Yes *3  |
+|                    | set_power_limit.py                       | NO     | NO     | Yes *3 | Yes *3  |
 |                    | get_power_metrics.py                     | Yes    | Yes    | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
-| BMC Configuration  | get_bmc_ntp.py                           | Yes    | Yes    | Yes    | Yes     |
-|                    | set_bmc_ntp.py                           | Yes    | Yes    | Yes    | Yes     |
+| BMC Configuration  | get_bmc_ntp.py                           | Yes    | Yes    | Yes *3 | Yes *3  |
+|                    | set_bmc_ntp.py                           | Yes    | Yes    | Yes *3 | Yes *3  |
 |                    | lenovo_set_bmc_dns.py                    | Yes    | Yes    | Yes    | Yes     |
 |                    | get_networkprotocol_info.py              | Yes    | Yes    | Yes    | Yes     |
 |                    | set_networkprotocol.py                   | Yes    | Yes    | Yes    | Yes     |
@@ -89,9 +89,9 @@
 |                    | lenovo_mount_virtual_media.py            | Yes    | Yes    | Yes    | Yes     |
 |                    | lenovo_umount_virtual_media.py           | Yes    | Yes    | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
-| RAID Configuration | lenovo_create_raid_volume.py             | NO     | Yes    | Yes    | Yes     |
-|                    | lenovo_delete_raid_volume.py             | NO     | Yes    | Yes    | Yes     |
-|                    | lenovo_update_raid_volume.py             | NO     | Yes    | Yes    | Yes     |
+| RAID Configuration | lenovo_create_raid_volume.py             | NO     | Yes *4 | Yes    | Yes     |
+|                    | lenovo_delete_raid_volume.py             | NO     | Yes *4 | Yes    | Yes     |
+|                    | lenovo_update_raid_volume.py             | NO     | Yes *4 | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
 | FW Update          | get_fw_inventory.py                      | Yes    | Yes    | Yes    | Yes     |
 |                    | update_firmware.py                       | NO     | Yes    | Yes    | Yes     |
@@ -132,3 +132,10 @@
 |                    | del_tasks.py                             | Yes    | Yes    | Yes    | Yes     |
 |                    | get_schema.py                            | Yes    | Yes    | Yes    | Yes     |
 |--------------------|------------------------------------------|--------|--------|--------|---------|
+
+*1: Need to ajust the jumper
+*2: After enabling user, may request changing password for first login
+*3: Not support for SN550, SN850. These info are controlled by CMM or SMM.
+*4: Supported from firmware release of March, 2021
+
+Note: on different products, per the difference of hardware design and Redfish spec/schema supported are different, so there will be little different behaviors and properties.
